@@ -543,6 +543,7 @@ pub fn start(rt_id: RuntimeId, opts: StartOptions) -> Result<(), Error> {
     #[cfg(feature = "ctrlc")]
     tasks.push(Box::pin(async move {
         let _ = tokio::signal::ctrl_c().await;
+        info!("ctrl c received");
     }));
 
     RUNTIME_MANAGER
@@ -552,8 +553,9 @@ pub fn start(rt_id: RuntimeId, opts: StartOptions) -> Result<(), Error> {
 
     trace!("added runtime {}", &rt_id);
 
+    info!("block on start");
     rt.block_on(futures::future::select_all(tasks));
-
+    info!("block on end");
     #[cfg(all(feature = "inbound-tun", any(target_os = "macos", target_os = "linux")))]
     sys::post_tun_completion_setup(&net_info);
 

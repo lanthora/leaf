@@ -10,9 +10,7 @@ name = "leaf"
 path = "src/lib.rs"
 
 [features]
-default = [
-    "default-ring"
-]
+default = ["default-ring"]
 
 default-ring = [
     "all-configs",
@@ -45,10 +43,7 @@ rustls-tls-aws-lc = ["tokio-rustls/aws_lc_rs"]
 rustls-tls-ring = ["tokio-rustls/ring"]
 
 # Grouping all features
-all-configs = [
-    "config-conf",
-    "config-json",
-]
+all-configs = ["config-conf", "config-json"]
 all-endpoints = [
     # inbounds
     "inbound-chain",
@@ -99,27 +94,44 @@ config-json = ["serde", "serde_derive", "serde_json"]
 outbound-direct = []
 outbound-drop = []
 outbound-redirect = []
-outbound-shadowsocks = ["hkdf", "sha-1", "md-5", "percent-encoding", "tokio-util"]
+outbound-shadowsocks = [
+    "hkdf",
+    "sha-1",
+    "md-5",
+    "percent-encoding",
+    "tokio-util",
+]
 outbound-obfs = ["base64", "memchr"]
 outbound-socks = ["async-socks5"]
 outbound-trojan = ["sha2", "hex"]
 outbound-tls = []
 outbound-ws = ["tungstenite", "tokio-tungstenite", "url", "http"]
 outbound-failover = ["lru_time_cache"]
-outbound-static= []
+outbound-static = []
 outbound-tryall = []
 outbound-chain = []
-outbound-amux= ["tokio-util"]
+outbound-amux = ["tokio-util"]
 outbound-quic = ["quinn", "rustls", "webpki-roots-old", "rustls-pemfile-old"]
 outbound-select = ["directories"]
-outbound-vmess = ["lz_fnv", "cfb-mode", "hmac", "aes", "sha3", "digest", "uuid", "md-5", "tokio-util", "byteorder"]
+outbound-vmess = [
+    "lz_fnv",
+    "cfb-mode",
+    "hmac",
+    "aes",
+    "sha3",
+    "digest",
+    "uuid",
+    "md-5",
+    "tokio-util",
+    "byteorder",
+]
 
 # Inbounds
 inbound-trojan = ["sha2", "hex"]
 inbound-shadowsocks = ["hkdf", "sha-1", "md-5", "tokio-util"]
 inbound-socks = []
 inbound-http = ["http"]
-inbound-tun = ["tun", "netstack-lwip", "pnet_datalink"]
+inbound-tun = ["tun-rs", "netstack-lwip", "pnet_datalink"]
 inbound-ws = ["tungstenite", "tokio-tungstenite", "url", "http"]
 inbound-amux = ["tokio-util"]
 inbound-quic = ["quinn", "rustls", "rustls-pemfile-old"]
@@ -135,7 +147,14 @@ ctrlc = ["tokio/signal"]
 
 [dependencies]
 # Common
-tokio = { version = "1", features = ["sync", "io-util", "net", "time", "rt", "rt-multi-thread"] }
+tokio = { version = "1", features = [
+    "sync",
+    "io-util",
+    "net",
+    "time",
+    "rt",
+    "rt-multi-thread",
+] }
 protobuf = "=3.6.0"
 thiserror = "1.0"
 futures = "0.3"
@@ -185,7 +204,10 @@ ring = { version = "0.17", optional = true }
 aws-lc-rs = { version = "1.7", features = ["bindgen"], optional = true }
 
 # TLS/rustls/QUIC
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"], optional = true }
+tokio-rustls = { version = "0.26", default-features = false, features = [
+    "logging",
+    "tls12",
+], optional = true }
 webpki-roots = { version = "0.26", optional = true }
 webpki-roots-old = { package = "webpki-roots", version = "0.25", optional = true }
 rustls-pemfile = { version = "2.1", optional = true }
@@ -234,10 +256,15 @@ byteorder = { version = "1", optional = true }
 lru_time_cache = { version = "0.11", optional = true }
 
 # amux
-tokio-util = { version = "0.7", default-features = false, features = ["io"], optional = true }
+tokio-util = { version = "0.7", default-features = false, features = [
+    "io",
+], optional = true }
 
 # QUIC
-quinn = { version = "0.10", default-features = false, features = ["tls-rustls", "runtime-tokio"], optional = true }
+quinn = { version = "0.10", default-features = false, features = [
+    "tls-rustls",
+    "runtime-tokio",
+], optional = true }
 rustls = { version = "0.21", optional = true }
 
 # API
@@ -246,13 +273,12 @@ warp = { version = "0.3", default-features = false, optional = true }
 # Auto reload
 notify = { version = "6", optional = true }
 
+# TUN
+tun-rs = { version = "2.0.2", features = ["async", "async_framed"], optional = true }
+netstack-lwip = { git = "https://github.com/lanthora/netstack-lwip.git", rev = "2971587", optional = true }
+
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
-
-# TUN
-[target.'cfg(any(target_os = "ios", target_os = "android", target_os = "macos", target_os = "linux"))'.dependencies]
-tun = { git = "https://github.com/eycorsican/rust-tun.git", branch = "fork", features = ["async"], optional = true }
-netstack-lwip = { git = "https://github.com/eycorsican/netstack-lwip.git", rev = "b1f8596", optional = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
 pnet_datalink = { version = "0.34", package = "pnet_datalink", optional = true }
@@ -265,7 +291,15 @@ memchr = { version = "2" }
 [dev-dependencies]
 rcgen = "0.13"
 sha2 = "0.10"
-tokio = { version = "1", features = ["fs", "sync", "io-util", "net", "time", "rt", "rt-multi-thread"] }
+tokio = { version = "1", features = [
+    "fs",
+    "sync",
+    "io-util",
+    "net",
+    "time",
+    "rt",
+    "rt-multi-thread",
+] }
 
 [build-dependencies]
 cc = "1.0"

@@ -8,7 +8,10 @@ use protobuf::Message;
 use tokio::sync::mpsc::channel as tokio_channel;
 use tokio::sync::mpsc::{Receiver as TokioReceiver, Sender as TokioSender};
 use tracing::{debug, error, info, trace, warn};
-use tun::{self, TunPacket};
+use tun_rs::async_framed::{BytesCodec, DeviceFramed};
+use tun_rs::AsyncDevice;
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+use tun_rs::DeviceBuilder;
 
 use crate::{
     app::dispatcher::Dispatcher,
@@ -165,35 +168,6 @@ pub fn new(
 ) -> Result<Runner> {
     let settings = TunInboundSettings::parse_from_bytes(&inbound.settings)?;
 
-    let mut cfg = tun::Configuration::default();
-    if settings.fd >= 0 {
-        cfg.raw_fd(settings.fd);
-    } else if settings.auto {
-        cfg.name(&*option::DEFAULT_TUN_NAME)
-            .address(&*option::DEFAULT_TUN_IPV4_ADDR)
-            .destination(&*option::DEFAULT_TUN_IPV4_GW)
-            .mtu(1500);
-
-        #[cfg(not(any(target_arch = "mips", target_arch = "mips64")))]
-        {
-            cfg.netmask(&*option::DEFAULT_TUN_IPV4_MASK);
-        }
-
-        cfg.up();
-    } else {
-        cfg.name(settings.name)
-            .address(settings.address)
-            .destination(settings.gateway)
-            .mtu(settings.mtu);
-
-        #[cfg(not(any(target_arch = "mips", target_arch = "mips64")))]
-        {
-            cfg.netmask(settings.netmask);
-        }
-
-        cfg.up();
-    }
-
     // FIXME it's a bad design to have 2 lists in config while we need only one
     let fake_dns_exclude = settings.fake_dns_exclude;
     let fake_dns_include = settings.fake_dns_include;
@@ -208,7 +182,25 @@ pub fn new(
         (FakeDnsMode::Exclude, fake_dns_exclude)
     };
 
-    let tun = tun::create_as_async(&cfg).map_err(|e| anyhow!("create tun failed: {}", e))?;
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+    let dev = {
+        if settings.fd >= 0 {
+            unsafe { AsyncDevice::from_fd(settings.fd)? }
+        } else {
+            DeviceBuilder::new()
+                .ipv4(
+                    &*option::DEFAULT_TUN_IPV4_ADDR.as_str(),
+                    &*option::DEFAULT_TUN_IPV4_MASK.as_str(),
+                    Some(&*option::DEFAULT_TUN_IPV4_GW.as_str()),
+                )
+                .mtu(1500)
+                .build_async()?
+        }
+    };
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let dev = unsafe { AsyncDevice::from_fd(settings.fd)? };
+
+    let dev = Arc::new(dev);
 
     if settings.auto {
         assert!(settings.fd == -1, "tun-auto is not compatible with tun-fd");
@@ -226,22 +218,22 @@ pub fn new(
         }
 
         let inbound_tag = inbound.tag.clone();
-        let framed = tun.into_framed();
-        let (mut tun_sink, mut tun_stream) = framed.split();
         let (mut stack_sink, mut stack_stream) = stack.split();
 
         let mut futs: Vec<Runner> = Vec::new();
 
+        let send_dev = dev.clone();
         // Reads packet from stack and sends to TUN.
         futs.push(Box::pin(async move {
             while let Some(pkt) = stack_stream.next().await {
                 match pkt {
                     Ok(pkt) => {
-                        if let Err(e) = tun_sink.send(TunPacket::new(pkt)).await {
+                        if let Err(e) = send_dev.send(&pkt).await {
                             // TODO Return the error
                             error!("Sending packet to TUN failed: {}", e);
                             return;
                         }
+                        trace!("tun send");
                     }
                     Err(e) => {
                         error!("Net stack erorr: {}", e);
@@ -252,11 +244,14 @@ pub fn new(
         }));
 
         // Reads packet from TUN and sends to stack.
+        let recv_dev = dev.clone();
         futs.push(Box::pin(async move {
-            while let Some(pkt) = tun_stream.next().await {
-                match pkt {
+            let mut framed = DeviceFramed::new(recv_dev, BytesCodec::new());
+            while let Some(rs) = framed.next().await {
+                trace!("tun received");
+                match rs {
                     Ok(pkt) => {
-                        if let Err(e) = stack_sink.send(pkt.into_bytes().into()).await {
+                        if let Err(e) = stack_sink.send(pkt.to_vec()).await {
                             error!("Sending packet to NetStack failed: {}", e);
                             return;
                         }
@@ -293,5 +288,6 @@ pub fn new(
 
         info!("start tun inbound");
         futures::future::select_all(futs).await;
+        info!("stop tun inbound");
     }))
 }
